@@ -191,7 +191,7 @@ def maybe_autocast(
     Which makes graph splitting in `torch.compile` more flexible as it removes the
     requirement that partition IDs be monotonically increasing.
     """
-    if torch.is_autocast_enabled(device_type) or enabled:
+    if torch.is_autocast_enabled() or enabled:
         return torch.autocast(device_type, dtype=dtype, enabled=enabled, cache_enabled=cache_enabled)
     else:
         return nullcontext()
