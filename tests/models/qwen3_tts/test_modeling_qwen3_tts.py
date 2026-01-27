@@ -8,11 +8,9 @@ from transformers.models.qwen3_tts.modeling_qwen3_tts import (
     Qwen3TTSTokenizerV2Encoder,
 )
 from transformers.models.mimi.configuration_mimi import MimiConfig
-from qwen3_tts import Qwen3TTSTokenizer      # original repo
+from qwen_tts import Qwen3TTSTokenizer      # original repo
 
 
-if __name__=="__main__":
-    main()
 
 def load_audio_from_url(url: str, target_sr: int = 24000):
     # Download
@@ -39,7 +37,6 @@ def load_audio_from_url(url: str, target_sr: int = 24000):
 def main():
     torch.manual_seed(0)
     torch.use_deterministic_algorithms(True)
-    encoder.eval()
 
     encoder = Qwen3TTSTokenizerV2Encoder(config=MimiConfig())#**encoder_config)
     ref_audio_path_1 = "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen3-TTS-Repo/clone_2.wav"
@@ -56,16 +53,13 @@ def main():
 
 
     audio_codes = encoded_frames.audio_codes[:, :encoder_valid_num_quantizers]
-    audio_codes = [code[..., :-(-mask.sum() // encode_downsample_rate)].transpose(0, 1) for code, mask in zip(audio_codes, padding_mask)]
+    hf_codes = [code[..., :-(-mask.sum() // encode_downsample_rate)].transpose(0, 1) for code, mask in zip(audio_codes, padding_mask)]
     
     print("Input:", input_values.shape)
     print("Encoded type:", type(encoded_frames))
     print("audio_codes shape:", encoded_frames.audio_codes.shape)
     print("dtype:", encoded_frames.audio_codes.dtype)
     print("min/max:", encoded_frames.audio_codes.min(), encoded_frames.audio_codes.max())
-
-
-    hf_codes = audio_codes.cpu()
     
     model = Qwen3TTSTokenizer()#.from_pretrained(
         #"Qwen/Qwen3-TTS-12Hz-1.7B-Base",
