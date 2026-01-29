@@ -554,6 +554,26 @@ def _compute_llama3_parameters(
 
     return inv_freq_llama, attention_factor
 
+def _compute_default_parameters(
+    config: "PreTrainedConfig",
+    device: Optional["torch.device"] = None,
+    seq_len: int | None = None,
+    layer_type: str | None = None,
+) -> tuple["torch.Tensor", float]:
+    """
+    Computes the standard (vanilla) RoPE inverse frequencies.
+    """
+    config.standardize_rope_params()
+    rope_parameters_dict = config.rope_parameters[layer_type] if layer_type is not None else config.rope_parameters
+
+    base = rope_parameters_dict.get("rope_theta", 10000.0)
+    partial_rotary_factor = rope_parameters_dict.get("partial_rotary_factor", 1.0)
+    head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+    dim = int(head_dim * partial_rotary_factor)
+
+    inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32, device=device) / dim))
+    attention_factor = 1.0  # default RoPE does not scale attention
+    return inv_freq, attention_factor
 
 # This maps the "rope_type" string field in rope config to the corresponding function to compute the RoPE parameters
 # from the model config. You can append new {'rope_type': callable} pairs to this rope_parameters to enable custom RoPE
@@ -563,7 +583,8 @@ ROPE_INIT_FUNCTIONS = {
     "dynamic": _compute_dynamic_ntk_parameters,
     "yarn": _compute_yarn_parameters,
     "longrope": _compute_longrope_parameters,
-    "llama3": _compute_llama3_parameters,
+    "llama3": _compute_llama3_parameters,#
+    "default": _compute_default_parameters,# help me here
 }
 
 
