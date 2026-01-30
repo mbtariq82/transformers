@@ -15,7 +15,7 @@ class Qwen3TTSTokenizerV2EncoderOutput(ModelOutput):
 
     audio_codes: List[torch.LongTensor] = None
 
-
+# DO NOT subclass MimiModel?
 class Qwen3TTSTokenizerV2Encoder(MimiModel):
     def __init__(self, config: MimiConfig):
         super().__init__(config)
