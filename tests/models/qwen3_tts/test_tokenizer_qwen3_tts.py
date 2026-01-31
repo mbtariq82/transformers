@@ -11,14 +11,13 @@ from transformers.models.qwen3_tts.modeling_qwen3_tts import Qwen3TTSTokenizerV2
 from transformers import AutoFeatureExtractor
 from qwen_tts import Qwen3TTSTokenizer      # original repo
 
-
 AudioInput = Union[
     str,  # wav path, or base64 string
     np.ndarray,  # 1-D float array
     List[str],
     List[np.ndarray],
 ]
-#class Qwen3TTSTokenizerTester:
+
 #@require_torch
 class Qwen3TTSTokenizerIntegrationTest(unittest.TestCase):
     pretrained_model_name_or_path = "Qwen/Qwen3-TTS-Tokenizer-12Hz"
@@ -72,7 +71,7 @@ class Qwen3TTSTokenizerIntegrationTest(unittest.TestCase):
 
         return audio.astype(np.float32)
 
-    def normalize_audio_inputs(self, audios: AudioInput, sr: Optional[int]) -> List[np.ndarray]:
+    def normalize_audio_inputs(self, audios: AudioInput, sr: Optional[int], target_sr: int = 24000) -> List[np.ndarray]:
             """
             Normalize all supported input types into a list of 1-D numpy float32 waveforms
             at `self.feature_extractor.sampling_rate`.
@@ -89,11 +88,6 @@ class Qwen3TTSTokenizerIntegrationTest(unittest.TestCase):
                 List[np.ndarray]:
                     List of float32 waveforms resampled to model input SR.
             """
-            ### should this be here?? ###
-            feature_extractor = AutoFeatureExtractor.from_pretrained(self.pretrained_model_name_or_path)
-            ###
-            target_sr = int(feature_extractor.sampling_rate)
-
             if isinstance(audios, (str, np.ndarray)):
                 audios = [audios]
 
@@ -136,14 +130,23 @@ class Qwen3TTSTokenizerIntegrationTest(unittest.TestCase):
 
         hf_tokenizer = Qwen3TTSTokenizerV2Model.from_pretrained(tokenizer_model_name)
         
-        audio = self.normalize_audio_inputs(ref_audio_path_1, sr=24000)
+        feature_extractor = AutoFeatureExtractor.from_pretrained(self.pretrained_model_name_or_path)
+        target_sr = int(feature_extractor.sampling_rate)
 
-        input_values = torch.from_numpy(audio).unsqueeze(0)  
-        hf_encoded_frames = hf_tokenizer.encode(input_values=input_values, return_dict=True)
+        wavs = self.normalize_audio_inputs(ref_audio_path_1, sr=24000, target_sr=target_sr)
+        inputs = feature_extractor(
+            raw_audio=wavs,
+            sampling_rate=target_sr,
+            return_tensors="pt",
+        )
+        device = getattr(hf_tokenizer, "device", None)
+        inputs = inputs.to(device).to(hf_tokenizer.dtype)
+
+        hf_encoded_frames = hf_tokenizer.encode(inputs["input_values"].squeeze(1), inputs["padding_mask"].squeeze(1))
         print("HF Encoded:", hf_encoded_frames, hf_encoded_frames.audio_codes[0].shape)
 
-        wavs1, out_sr1 = hf_tokenizer.decode(hf_encoded_frames)
-        print("HF Decoded audio:", wavs1)  # getting NaN values
+        wavs1, out_sr1 = hf_tokenizer.decode(hf_encoded_frames.audio_codes[0].unsqueeze(0))
+        print("HF Decoded audio:", wavs1)  
         sf.write("tests/models/qwen3_tts/hf_decoded_single_12hz_hf.wav", wavs1[0], out_sr1)
 
 
