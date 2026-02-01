@@ -8,12 +8,11 @@ import urllib.request
 import librosa
 from typing import List, Optional, Union
 from urllib.parse import urlparse
-from transformers.models.qwen3_tts.modeling_qwen3_tts import Qwen3TTSTokenizerV2Model
 from transformers import AutoFeatureExtractor, AutoProcessor
 
 #@require_torch?
 class Qwen3TTSProcessorTest(unittest.TestCase):
-    processor_class = Qwen3TTSTokenizerV2Model
+    processor_class = Qwen3TTSProcessor # TODO
     model_id = "Qwen/Qwen3-TTS-Tokenizer-12Hz"
 
     def test_save_load_pretrained(self):
@@ -37,4 +36,5 @@ class Qwen3TTSProcessorTest(unittest.TestCase):
 
     def test_tokenizer(self):
         tokenizer = Qwen3TTSTokenizerV2Model.from_pretrained(self.model_id)
-        
+        processor = AutoProcessor.from_pretrained(self.model_id)
+
