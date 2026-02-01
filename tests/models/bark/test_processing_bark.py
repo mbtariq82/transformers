@@ -23,6 +23,14 @@ from transformers import AutoTokenizer, BarkProcessor
 from transformers.testing_utils import require_torch, slow
 
 
+AudioInput = Union[
+    str,  # wav path, or base64 string
+    np.ndarray,  # 1-D float array
+    List[str],
+    List[np.ndarray],
+]
+
+
 @require_torch
 class BarkProcessorTest(unittest.TestCase):
     def setUp(self):
@@ -132,3 +140,44 @@ class BarkProcessorTest(unittest.TestCase):
 
         for key in encoded_tok:
             self.assertListEqual(encoded_tok[key], encoded_processor[key].squeeze().tolist())
+
+
+
+
+
+    def test_encoder_decoder(self):
+        ref_audio_path_1 = "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen3-TTS-Repo/tokenizer_demo_1.wav"
+
+        ### this should be in modeling ###
+        qwen_tokenizer = Qwen3TTSTokenizer.from_pretrained(self.model_id)   
+        qwen_encoded_frames = qwen_tokenizer.encode(ref_audio_path_1)
+        print("Qwen Encoded:", qwen_encoded_frames, qwen_encoded_frames.audio_codes[0].shape)
+        #wavs1, out_sr1 = qwen_tokenizer.decode(qwen_encoded_frames)
+        #print("Decoded audio:", wavs1)  # getting NaN values
+       # sf.write("decoded_single_12hz.wav", wavs1[0], out_sr1)
+        ###
+
+        ### this should be in modeling ###
+        hf_tokenizer = Qwen3TTSTokenizerV2Model.from_pretrained(self.model_id)
+        feature_extractor = AutoFeatureExtractor.from_pretrained(self.model_id)
+        target_sr = int(feature_extractor.sampling_rate)
+        wavs = self.normalize_audio_inputs(ref_audio_path_1, sr=24000, target_sr=target_sr)
+        inputs = feature_extractor(
+            raw_audio=wavs,
+            sampling_rate=target_sr,
+            return_tensors="pt",
+        )
+        device = getattr(hf_tokenizer, "device", None)
+        inputs = inputs.to(device).to(hf_tokenizer.dtype)
+        hf_encoded_frames = hf_tokenizer.encode(inputs["input_values"].squeeze(1), inputs["padding_mask"].squeeze(1))
+        print("HF Encoded:", hf_encoded_frames, hf_encoded_frames.audio_codes[0].shape)
+        audio_codes_padded = hf_encoded_frames.audio_codes[0].unsqueeze(0).to(device)
+        hf_decoded_frames = hf_tokenizer.decode(audio_codes_padded)
+        print("HF Decoded audio:", hf_decoded_frames)
+        wav_tensors = hf_decoded_frames.audio_values
+        wavs = [w.to(torch.float32).detach().cpu().numpy() for w in wav_tensors]
+        out_sr1 = hf_tokenizer.get_output_sample_rate()
+        #sf.write("hf_decoded_single_12hz_hf.wav", wavs[0], out_sr1)
+
+        assert torch.allclose(torch.tensor(qwen_encoded_frames.audio_codes[0]), hf_encoded_frames.audio_codes[0], atol=1e-5), "Encoded audio codes do not match!"
+        print("Encoded audio codes match!")
