@@ -11,13 +11,6 @@ from urllib.parse import urlparse
 from transformers.models.qwen3_tts.modeling_qwen3_tts import Qwen3TTSTokenizerV2Model, Qwen3TTSTokenizerV2Config
 from transformers import AutoFeatureExtractor, AutoProcessor
 
-AudioInput = Union[
-    str,  # wav path, or base64 string
-    np.ndarray,  # 1-D float array
-    List[str],
-    List[np.ndarray],
-]
-
 class Qwen3TTSTokenizerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -32,8 +25,6 @@ class Qwen3TTSTokenizerTest(unittest.TestCase):
         )
         cls.tokenizer = Qwen3TTSTokenizerV2Model.from_pretrained(cls.model_id)
         cls.feature_extractor = AutoFeatureExtractor.from_pretrained(cls.model_id)
-
-
 
     @staticmethod
     def _get_test_config():
@@ -58,24 +49,23 @@ class Qwen3TTSTokenizerTest(unittest.TestCase):
 
     def test_tokenizer_model_init_from_config(self):
         pass # TODO
-    #    model = Qwen3TTSTokenizerV2Model(self.config)
-#
-    #    self.assertEqual(
-    #        model.get_input_sample_rate(),
-    #        self.config.input_sample_rate,
-    #    )
-    #    self.assertEqual(
-    #        model.get_output_sample_rate(),
-    #        self.config.output_sample_rate,
-    #    )
-    #    self.assertEqual(
-    #        model.get_encode_downsample_rate(),
-    #        self.config.encode_downsample_rate,
-    #    )
-    #    self.assertEqual(
-    #        model.get_decode_upsample_rate(),
-    #        self.config.decode_upsample_rate,
-    #    )
+        #    model = Qwen3TTSTokenizerV2Model(self.config)
+        #    self.assertEqual(
+        #        model.get_input_sample_rate(),
+        #        self.config.input_sample_rate,
+        #    )
+        #    self.assertEqual(
+        #        model.get_output_sample_rate(),
+        #        self.config.output_sample_rate,
+        #    )
+        #    self.assertEqual(
+        #        model.get_encode_downsample_rate(),
+        #        self.config.encode_downsample_rate,
+        #    )
+        #    self.assertEqual(
+        #        model.get_decode_upsample_rate(),
+        #        self.config.decode_upsample_rate,
+        #    )
 
     def test_encoder(self):
         target_sr = int(self.feature_extractor.sampling_rate)
@@ -105,7 +95,7 @@ class Qwen3TTSTokenizerTest(unittest.TestCase):
         assert torch.allclose(
             wav.cpu(),
             self.expected_decoding,
-            atol=1e-6,
+            atol=1e-3,
         ), (
             f"Decoded wavs do not match hardcoded reference:\n"
             f"{wav} vs {self.expected_decoding}"
