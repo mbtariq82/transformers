@@ -13,22 +13,20 @@
 # limitations under the License.
 
 import torch
+import unittest
 from torch import nn
 from transformers import AutoModelForCausalLM
 from transformers.testing_utils import torch_device
 from transformers.utils import is_peft_available
-
-from trl.models.activation_offloading import NoOpManager, OffloadActivations
-
-from .testing_utils import TrlTestCase, require_peft, require_torch_accelerator
-
+from transformers.utils.activation_offloading import NoOpManager, OffloadActivations
+from transformers.testing_utils import require_peft, require_torch_gpu
 
 if is_peft_available():
     from peft import LoraConfig, get_peft_model
 
 
-class TestActivationOffloading(TrlTestCase):
-    @require_torch_accelerator
+class TestActivationOffloading(unittest.TestCase):
+    @require_torch_gpu
     @require_peft
     def test_offloading_with_peft_models(self) -> None:
         """Test that activation offloading works with PEFT models."""
@@ -75,7 +73,7 @@ class TestActivationOffloading(TrlTestCase):
                         f"Gradient mismatch for {name_orig}"
                     )
 
-    @require_torch_accelerator
+    @require_torch_gpu
     def test_noop_manager_with_offloading(self):
         model_id = "trl-internal-testing/tiny-Qwen2ForCausalLM-2.5"
         model = AutoModelForCausalLM.from_pretrained(model_id).to(torch_device)
@@ -105,7 +103,7 @@ class TestActivationOffloading(TrlTestCase):
         for g1, g2 in zip(grads1, grads2, strict=True):
             assert torch.allclose(g1, g2, rtol=1e-4, atol=1e-5)
 
-    @require_torch_accelerator
+    @require_torch_gpu
     def test_min_offload_size(self):
         """Test that tensors smaller than min_offload_size aren't offloaded"""
         model = nn.Sequential(
@@ -122,7 +120,7 @@ class TestActivationOffloading(TrlTestCase):
         # The test passes if no errors occur, as we're mainly testing
         # that the logic handles both offloaded and non-offloaded tensors
 
-    @require_torch_accelerator
+    @require_torch_gpu
     def test_real_hf_model(self):
         """Test with an actual HuggingFace model"""
         model_id = "trl-internal-testing/tiny-Qwen2ForCausalLM-2.5"
@@ -154,7 +152,7 @@ class TestActivationOffloading(TrlTestCase):
         for g1, g2 in zip(grads1, grads2, strict=True):
             assert torch.allclose(g1, g2, rtol=1e-5)
 
-    @require_torch_accelerator
+    @require_torch_gpu
     def test_tensor_deduplication(self):
         """Test that deduplication works correctly for tensors sharing storage"""
 
@@ -195,7 +193,7 @@ class TestActivationOffloading(TrlTestCase):
 
         loss.backward()
 
-    @require_torch_accelerator
+    @require_torch_gpu
     def test_parameter_filtering(self):
         """Test that model parameters are filtered during offloading"""
         model = nn.Sequential(nn.Linear(10, 20), nn.Linear(20, 10)).to(torch_device)

@@ -172,6 +172,7 @@ from .utils import (
 )
 from .utils.import_utils import requires
 from .utils.quantization_config import QuantizationMethod
+from .utils.activation_offloading import get_act_offloading_ctx_manager
 
 
 DEFAULT_CALLBACKS = [DefaultFlowCallback]
@@ -762,15 +763,12 @@ class Trainer:
             num_devices = xr.global_runtime_device_count()
             xs.set_global_mesh(xs.Mesh(np.array(range(num_devices)), (num_devices, 1), axis_names=("fsdp", "tensor")))
         self.is_fsdp_xla_v1_enabled = self.is_fsdp_xla_enabled and not self.is_fsdp_xla_v2_enabled
-
-
-                # Initialize activation offloading context
+        
+        # Initialize activation offloading context
         if self.args.activation_offloading:
             self.maybe_activation_offload_context = get_act_offloading_ctx_manager(model=self.model)
         else:
             self.maybe_activation_offload_context = contextlib.nullcontext()
-
-        self.aux_loss_enabled = getattr(model.config, "output_router_logits", False)
 
         # Initialize the metrics
         self._metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
@@ -778,7 +776,6 @@ class Trainer:
 
         # Add tags to the model
         self.model.add_model_tags(self._tag_names)
-        
 
     def _activate_neftune(self, model):
         r"""
