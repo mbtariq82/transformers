@@ -11,133 +11,19 @@ from typing import List, Optional, Union
 from transformers.models.qwen3_tts.modeling_qwen3_tts import Qwen3TTSTokenizerV2Model, Qwen3TTSTokenizerV2Config
 from transformers import AutoFeatureExtractor, AutoProcessor
 
+AudioInput = Union[
+    str,  # wav path, or base64 string
+    np.ndarray,  # 1-D float array
+    List[str],
+    List[np.ndarray],
+]
+
 class Qwen3TTSTokenizerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.model_id = "Qwen/Qwen3-TTS-Tokenizer-12Hz"
-
-    @staticmethod
-    def _get_test_config():
-        return Qwen3TTSTokenizerV2Config(
-            input_sample_rate=16000,
-            output_sample_rate=16000,
-            encode_downsample_rate=320,
-            decode_upsample_rate=320,
-            encoder_valid_num_quantizers=4,
-            encoder_config={
-                "hidden_size": 64,
-                "num_layers": 2,
-            },
-            decoder_config={
-                "hidden_size": 64,
-                "num_layers": 2,
-            },
-        )
-
-    def _load_audio(self, x: str, target_sr: int) -> np.ndarray:
-        """
-        Load audio from url
-        """
-        with urllib.request.urlopen(x) as resp:
-            audio_bytes = resp.read()
-        with io.BytesIO(audio_bytes) as f:
-            audio, sr = sf.read(f, dtype="float32", always_2d=False)
-        if audio.ndim > 1:
-            audio = np.mean(audio, axis=-1)
-        if sr != target_sr:
-            audio = librosa.resample(y=audio, orig_sr=sr, target_sr=target_sr)
-        return audio.astype(np.float32)
-
-    def normalize_audio_inputs(self, audios: AudioInput, sr: Optional[int], target_sr: int = 24000) -> List[np.ndarray]:
-        """
-        Normalize into a list of 1-D numpy float32 waveforms
-        at `self.feature_extractor.sampling_rate`.
-
-        Args:
-            audios (AudioInput):
-                - str: wav path 
-                - np.ndarray: raw waveform (sr must be provided)
-                - list[str] / list[np.ndarray]
-            sr (Optional[int]):
-                Sampling rate for raw numpy input. Required if input is np.ndarray or list[np.ndarray].
-
-        Returns:
-            List[np.ndarray]:
-                List of float32 waveforms resampled to model input SR.
-        """
-        if isinstance(audios, (str, np.ndarray)):
-            audios = [audios]
-
-        if len(audios) == 0:
-            return []
-
-        if isinstance(audios[0], str):
-            # wav path list or base64 list
-            return [self._load_audio(x, target_sr=target_sr) for x in audios]  # type: ignore[arg-type]
-
-        # numpy list
-        if sr is None:
-            raise ValueError("For numpy waveform input, you must provide `sr` (original sampling rate).")
-
-        out: List[np.ndarray] = []
-        for a in audios:  # type: ignore[assignment]
-            if not isinstance(a, np.ndarray):
-                raise TypeError("Mixed input types are not supported. Use all paths/base64 or all numpy arrays.")
-            if a.ndim > 1:
-                a = np.mean(a, axis=-1)
-            if int(sr) != target_sr:
-                a = librosa.resample(y=a.astype(np.float32), orig_sr=int(sr), target_sr=target_sr)
-            out.append(a.astype(np.float32))
-        return out
-
-    def test_save_and_load_pretrained(self):
-        pass # TODO
-
-    def test_tokenizer_model_init_from_config(self):
-        pass # TODO
-    #    model = Qwen3TTSTokenizerV2Model(self.config)
-#
-    #    self.assertEqual(
-    #        model.get_input_sample_rate(),
-    #        self.config.input_sample_rate,
-    #    )
-    #    self.assertEqual(
-    #        model.get_output_sample_rate(),
-    #        self.config.output_sample_rate,
-    #    )
-    #    self.assertEqual(
-    #        model.get_encode_downsample_rate(),
-    #        self.config.encode_downsample_rate,
-    #    )
-    #    self.assertEqual(
-    #        model.get_decode_upsample_rate(),
-    #        self.config.decode_upsample_rate,
-    #    )
-
-    def test_encoder_decoder(self):
-        ref_audio_path_1 = "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen3-TTS-Repo/tokenizer_demo_1.wav"
-
-        tokenizer = Qwen3TTSTokenizerV2Model.from_pretrained(self.model_id)
-        feature_extractor = AutoFeatureExtractor.from_pretrained(self.model_id)
-        target_sr = int(feature_extractor.sampling_rate)
-        wavs = self.normalize_audio_inputs(ref_audio_path_1, sr=24000, target_sr=target_sr)
-        inputs = feature_extractor(
-            raw_audio=wavs,
-            sampling_rate=target_sr,
-            return_tensors="pt",
-        )
-        device = getattr(tokenizer, "device", None)
-        inputs = inputs.to(device).to(tokenizer.dtype)
-        encoded_frames = tokenizer.encode(inputs["input_values"].squeeze(1), inputs["padding_mask"].squeeze(1))
-        print("HF Encoded:", encoded_frames, encoded_frames.audio_codes[0].shape)
-        audio_codes_padded = encoded_frames.audio_codes[0].unsqueeze(0).to(device)
-        decoded_frames = tokenizer.decode(audio_codes_padded)
-        print("HF Decoded audio:", decoded_frames)
-        wav_tensors = decoded_frames.audio_values
-        wavs = [w.to(torch.float32).detach().cpu().numpy() for w in wav_tensors]
-
-
-        HARDCODED_AUDIO_CODES = torch.tensor(
+        cls.ref_audio_1 = "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen3-TTS-Repo/tokenizer_demo_1.wav"
+        cls.expected_encoding = torch.tensor(
             [
                 [1221, 1701,  894, 1626, 1458,  789,  155, 1015,  676,  436, 1998, 1350,
                     8, 1732, 1718, 2035],
@@ -406,18 +292,134 @@ class Qwen3TTSTokenizerTest(unittest.TestCase):
             ],
             dtype=torch.long,
         )
+        #cls.config = cls._get_test_config()
+        cls.tokenizer = Qwen3TTSTokenizerV2Model.from_pretrained(cls.model_id)
+        cls.feature_extractor = AutoFeatureExtractor.from_pretrained(cls.model_id)
 
-        actual_codes = encoded_frames.audio_codes[0].cpu()
+    @staticmethod
+    def _get_test_config():
+        return Qwen3TTSTokenizerV2Config(
+            input_sample_rate=16000,
+            output_sample_rate=16000,
+            encode_downsample_rate=320,
+            decode_upsample_rate=320,
+            encoder_valid_num_quantizers=4,
+            encoder_config={
+                "hidden_size": 64,
+                "num_layers": 2,
+            },
+            decoder_config={
+                "hidden_size": 64,
+                "num_layers": 2,
+            },
+        )
 
-        assert actual_codes.shape == HARDCODED_AUDIO_CODES.shape, (
-            f"Shape mismatch: {actual_codes.shape} vs {HARDCODED_AUDIO_CODES.shape}"
+    def _load_audio(self, x: str, target_sr: int) -> np.ndarray:
+        """
+        Load audio from url
+        """
+        with urllib.request.urlopen(x) as resp:
+            audio_bytes = resp.read()
+        with io.BytesIO(audio_bytes) as f:
+            audio, sr = sf.read(f, dtype="float32", always_2d=False)
+        if audio.ndim > 1:
+            audio = np.mean(audio, axis=-1)
+        if sr != target_sr:
+            audio = librosa.resample(y=audio, orig_sr=sr, target_sr=target_sr)
+        return audio.astype(np.float32)
+
+    def _normalize_audio_inputs(self, audios: AudioInput, sr: Optional[int], target_sr: int = 24000) -> List[np.ndarray]:
+        """
+        Normalize into a list of 1-D numpy float32 waveforms
+        at `self.feature_extractor.sampling_rate`.
+
+        Args:
+            audios (AudioInput):
+                - str: wav path 
+                - np.ndarray: raw waveform (sr must be provided)
+                - list[str] / list[np.ndarray]
+            sr (Optional[int]):
+                Sampling rate for raw numpy input. Required if input is np.ndarray or list[np.ndarray].
+
+        Returns:
+            List[np.ndarray]:
+                List of float32 waveforms resampled to model input SR.
+        """
+        if isinstance(audios, (str, np.ndarray)):
+            audios = [audios]
+
+        if len(audios) == 0:
+            return []
+
+        if isinstance(audios[0], str):
+            # wav path list or base64 list
+            return [self._load_audio(x, target_sr=target_sr) for x in audios]  # type: ignore[arg-type]
+
+        # numpy list
+        if sr is None:
+            raise ValueError("For numpy waveform input, you must provide `sr` (original sampling rate).")
+
+        out: List[np.ndarray] = []
+        for a in audios:  # type: ignore[assignment]
+            if not isinstance(a, np.ndarray):
+                raise TypeError("Mixed input types are not supported. Use all paths/base64 or all numpy arrays.")
+            if a.ndim > 1:
+                a = np.mean(a, axis=-1)
+            if int(sr) != target_sr:
+                a = librosa.resample(y=a.astype(np.float32), orig_sr=int(sr), target_sr=target_sr)
+            out.append(a.astype(np.float32))
+        return out
+
+    def test_save_and_load_pretrained(self):
+        pass # TODO
+
+    def test_tokenizer_model_init_from_config(self):
+        pass # TODO
+        #    model = Qwen3TTSTokenizerV2Model(self.config)
+        #    self.assertEqual(
+        #        model.get_input_sample_rate(),
+        #        self.config.input_sample_rate,
+        #    )
+        #    self.assertEqual(
+        #        model.get_output_sample_rate(),
+        #        self.config.output_sample_rate,
+        #    )
+        #    self.assertEqual(
+        #        model.get_encode_downsample_rate(),
+        #        self.config.encode_downsample_rate,
+        #    )
+        #    self.assertEqual(
+        #        model.get_decode_upsample_rate(),
+        #        self.config.decode_upsample_rate,
+        #    )
+
+    def test_encoder(self):
+        target_sr = int(self.feature_extractor.sampling_rate)
+        wavs = self._normalize_audio_inputs(self.ref_audio_1, sr=target_sr)
+        inputs = self.feature_extractor(
+            raw_audio=wavs,
+            sampling_rate=target_sr,
+            return_tensors="pt",
+        )
+        device = getattr(self.tokenizer, "device", None)
+        inputs = inputs.to(device).to(self.tokenizer.dtype)
+        encoded_frames = self.tokenizer.encode(inputs["input_values"].squeeze(1), inputs["padding_mask"].squeeze(1)).audio_codes[0].cpu()
+        assert encoded_frames.shape == self.expected_encoding.shape, (
+            f"Shape mismatch: {encoded_frames.shape} vs {self.expected_encoding.shape}"
         )
         assert torch.equal(encoded_frames, self.expected_encoding), (
             "Encoded audio codes do not match hardcoded reference!"
         )
 
-        print("✅ Encoded audio codes match!")
+    def test_decoder(self):
+        decoded_frames = self.tokenizer.decode(self.expected_encoding.unsqueeze(0))
+        wavs = decoded_frames.audio_values[0]
 
-        # TODO: compare decoded wav tensor
+        assert wavs.shape == torch.Size([252885]), (
+            f"Shape mismatch: {wavs.shape} vs {torch.Size([252885])}"
+        )
+        
+        # how should i test the contents of wavs (cannot hardcode due to rounding error)
+
 
 
