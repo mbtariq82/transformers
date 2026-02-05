@@ -363,6 +363,8 @@ class TrainingArguments:
         auto_find_batch_size (`bool`, *optional*, defaults to `False`)
             Whether to find a batch size that will fit into memory automatically through exponential decay, avoiding
             CUDA Out-of-Memory errors.
+        activation_offloading ('bool',*optional*, defaults to `False`)
+            Enable activation offloading to CPU during training to reduce GPU memory usage.
 
         > Logging & Monitoring Training
 
@@ -1413,6 +1415,13 @@ class TrainingArguments:
         default=False,
         metadata={
             "help": "Whether or not to use cache for the model For training, this is usually not needed apart from some PEFT methods that uses `past_key_values`."
+        },
+    )
+
+    activation_offloading: bool = field(
+        default=False,
+        metadata={
+            "help": "Enable activation offloading to CPU during training to reduce GPU memory usage. "
         },
     )
 
